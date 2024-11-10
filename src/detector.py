@@ -3,7 +3,7 @@ import pandas as pd
 
 from .db import UserCityOrders, db, engine
 
-def anamoly_detector(threshold=3):
+def anomaly_detector(threshold=3):
     conn = engine.connect()
 
     try:
@@ -14,22 +14,27 @@ def anamoly_detector(threshold=3):
         result_proxy = conn.execute(query)
         df = pd.DataFrame(result_proxy.fetchall(), columns=result_proxy.keys())
 
-        # Calculate mean and standard deviation for 'orders'
-        mean_orders = df['orders'].mean()
-        std_orders = df['orders'].std()
+        # Group by city and apply anomaly detection within each group
+        anomalies = pd.DataFrame()  # DataFrame to store all anomalies
+        for city, group in df.groupby('city'):
+            # Calculate mean and standard deviation for 'orders' within each city
+            mean_orders = group['orders'].mean()
+            std_orders = group['orders'].std()
 
-        # Set threshold (e.g., 3 standard deviations for anomaly detection)
-        threshold = 3
-        lower_bound = mean_orders - threshold * std_orders
-        upper_bound = mean_orders + threshold * std_orders
+            # Set threshold (e.g., 3 standard deviations for anomaly detection)
+            lower_bound = mean_orders - threshold * std_orders
+            upper_bound = mean_orders + threshold * std_orders
 
-        # Identify anomalies
-        df['is_anomaly'] = (df['orders'] < lower_bound) | (df['orders'] > upper_bound)
+            # Identify anomalies for this city
+            group['is_anomaly'] = (group['orders'] < lower_bound) | (group['orders'] > upper_bound)
+
+            # Append anomalies to the anomalies DataFrame
+            anomalies = pd.concat([anomalies, group[group['is_anomaly']]])
 
         # Display anomalies
-        anomalies = df[df['is_anomaly']]
         print("Anomalies detected:")
         print(anomalies)
         print('\n\n')
+
     finally:
         conn.close()
